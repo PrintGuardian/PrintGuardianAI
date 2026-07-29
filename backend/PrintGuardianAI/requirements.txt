@@ -1,0 +1,7 @@
+# The Docker image installs these from Debian packages on Raspberry Pi.
+# This file is retained only for a non-Docker development environment.
+fastapi<0.100
+uvicorn<0.23
+opencv-python-headless
+numpy
+requests
