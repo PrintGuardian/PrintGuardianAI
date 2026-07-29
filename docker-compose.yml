@@ -1,0 +1,10 @@
+services:
+  printguardianai:
+    build: .
+    container_name: printguardianai
+    ports:
+      - "8000:8000"
+    environment:
+      - OCTOPRINT_URL=http://octoprint:5000
+      - OCTOPRINT_API_KEY=
+    restart: unless-stopped
