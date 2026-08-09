@@ -1,4 +1,6 @@
 from fastapi import APIRouter, HTTPException, Response
+from fastapi.responses import StreamingResponse
+
 from .ai_detector import detector
 from .camera import camera
 from .config import get_settings
@@ -10,7 +12,11 @@ router = APIRouter(prefix="/api")
 
 @router.get("/status")
 def status() -> dict:
-    return {"service": get_settings().app_name, "status": "online", "camera": camera.status().__dict__}
+    return {
+        "service": get_settings().app_name,
+        "status": "online",
+        "camera": camera.status().__dict__,
+    }
 
 
 @router.get("/camera")
@@ -26,6 +32,22 @@ def camera_frame() -> Response:
     return Response(content=image, media_type="image/jpeg")
 
 
+@router.get("/camera/stream")
+def camera_stream() -> StreamingResponse:
+    status = camera.status()
+    if not status.online:
+        raise HTTPException(
+            status_code=503,
+            detail=status.error or "Camera stream is unavailable",
+        )
+
+    return StreamingResponse(
+        camera.mjpeg_stream(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
+
+
 @router.get("/analyze")
 def analyze() -> dict:
     frame = camera.frame()
@@ -34,11 +56,24 @@ def analyze() -> dict:
     result = detector.analyze(frame)
     payload = result.__dict__
     if result.risk_detected:
-        record_event("WARNING", "anomaly_suspected", "Unexpected visual change detected", **payload)
+        record_event(
+            "WARNING",
+            "anomaly_suspected",
+            "Unexpected visual change detected",
+            **payload,
+        )
         settings = get_settings()
-        if settings.auto_stop_enabled and result.confidence >= settings.auto_stop_confidence:
+        if (
+            settings.auto_stop_enabled
+            and result.confidence >= settings.auto_stop_confidence
+        ):
             stopped = octoprint.cancel_print()
-            record_event("CRITICAL", "automatic_stop", "Automatic print stop requested", **stopped)
+            record_event(
+                "CRITICAL",
+                "automatic_stop",
+                "Automatic print stop requested",
+                **stopped,
+            )
             payload["automatic_stop"] = stopped
     return payload
 
@@ -51,7 +86,12 @@ def printer_status() -> dict:
 @router.post("/printer/stop")
 def stop_print() -> dict:
     result = octoprint.cancel_print()
-    record_event("CRITICAL" if result["success"] else "WARNING", "manual_stop", "Manual print stop requested", **result)
+    record_event(
+        "CRITICAL" if result["success"] else "WARNING",
+        "manual_stop",
+        "Manual print stop requested",
+        **result,
+    )
     if not result["success"]:
         raise HTTPException(status_code=502, detail=result["reason"])
     return result
