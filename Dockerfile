@@ -1,10 +1,17 @@
-FROM python:3.12-slim
-
+FROM debian:bookworm-slim
 WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        python3 \
+        python3-fastapi \
+        python3-numpy \
+        python3-opencv \
+        python3-requests \
+        python3-uvicorn \
+    && rm -rf /var/lib/apt/lists/*
 COPY backend ./backend
-
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+RUN mkdir -p /app/data
+EXPOSE 8000
+CMD ["python3", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
