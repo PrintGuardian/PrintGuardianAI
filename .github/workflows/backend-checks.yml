@@ -8,9 +8,6 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend/PrintGuardianAI
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend/PrintGuardianAI/frontend
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
