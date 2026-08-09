@@ -1,10 +1,14 @@
 services:
-  printguardianai:
+  printguardian:
     build: .
     container_name: printguardianai
     ports:
       - "8000:8000"
-    environment:
-      - OCTOPRINT_URL=http://octoprint:5000
-      - OCTOPRINT_API_KEY=
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    # USB webcam detected on the target Raspberry Pi.
+    devices:
+      - /dev/video0:/dev/video0
     restart: unless-stopped
