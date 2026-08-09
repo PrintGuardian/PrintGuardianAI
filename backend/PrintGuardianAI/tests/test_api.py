@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from backend import events
+from backend.camera import Camera
 from backend.main import app
 
 
@@ -18,7 +19,11 @@ def test_root_describes_service() -> None:
 
 def test_event_store_returns_newest_events_first(tmp_path: Path, monkeypatch) -> None:
     event_path = tmp_path / "events.jsonl"
-    monkeypatch.setattr(events, "get_settings", lambda: SimpleNamespace(event_log_path=str(event_path)))
+    monkeypatch.setattr(
+        events,
+        "get_settings",
+        lambda: SimpleNamespace(event_log_path=str(event_path)),
+    )
 
     events.record_event("info", "first", "First event")
     events.record_event("warning", "second", "Second event")
@@ -27,3 +32,18 @@ def test_event_store_returns_newest_events_first(tmp_path: Path, monkeypatch) ->
 
     assert [event["type"] for event in saved] == ["second", "first"]
     assert saved[0]["level"] == "WARNING"
+
+
+def test_mjpeg_stream_emits_a_valid_frame(monkeypatch) -> None:
+    camera = Camera()
+    monkeypatch.setattr(
+        "backend.camera.get_settings",
+        lambda: SimpleNamespace(camera_stream_fps=30),
+    )
+    monkeypatch.setattr(camera, "jpeg", lambda: b"jpeg-bytes")
+
+    frame = next(camera.mjpeg_stream())
+
+    assert frame.startswith(b"--frame\r\nContent-Type: image/jpeg\r\n")
+    assert b"Content-Length: 10" in frame
+    assert frame.endswith(b"jpeg-bytes\r\n")
