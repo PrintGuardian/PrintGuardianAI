@@ -3,9 +3,10 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from backend import events
+from backend import config, events
 from backend.camera import Camera
 from backend.main import app
+from backend.octoprint import OctoPrintClient
 
 
 def test_root_describes_service() -> None:
@@ -47,3 +48,24 @@ def test_mjpeg_stream_emits_a_valid_frame(monkeypatch) -> None:
     assert frame.startswith(b"--frame\r\nContent-Type: image/jpeg\r\n")
     assert b"Content-Length: 10" in frame
     assert frame.endswith(b"jpeg-bytes\r\n")
+
+
+def test_settings_enforce_a_minimum_stream_rate(monkeypatch) -> None:
+    config.get_settings.cache_clear()
+    monkeypatch.setenv("CAMERA_STREAM_FPS", "0")
+
+    settings = config.get_settings()
+
+    assert settings.camera_stream_fps == 1
+    config.get_settings.cache_clear()
+
+
+def test_octoprint_returns_safe_response_when_not_configured(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "backend.octoprint.get_settings",
+        lambda: SimpleNamespace(octoprint_url="", octoprint_api_key=""),
+    )
+
+    result = OctoPrintClient().cancel_print()
+
+    assert result == {"success": False, "reason": "OctoPrint is not configured"}
