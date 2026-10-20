@@ -162,7 +162,14 @@ def test_octoprint_status_keeps_connection_when_job_request_fails(monkeypatch) -
             request_timeout_seconds=2,
         ),
     )
-    monkeypatch.setattr("backend.octoprint.requests.get", lambda *args, **kwargs: next(responses))
+
+    def fake_get(*args, **kwargs):
+        response = next(responses)
+        if isinstance(response, requests.RequestException):
+            raise response
+        return response
+
+    monkeypatch.setattr("backend.octoprint.requests.get", fake_get)
 
     result = OctoPrintClient().status()
 
