@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
 
 from .ai_detector import detector
-from .camera import camera
+from .camera import camera, discover_cameras
 from .config import get_settings
 from .events import recent_events, record_event
 from .octoprint import octoprint
@@ -22,6 +22,18 @@ def status() -> dict:
 @router.get("/camera")
 def camera_status() -> dict:
     return camera.status().__dict__
+
+
+@router.get("/camera/devices")
+def camera_devices(max_devices: int = 5) -> dict:
+    """Discover locally attached cameras that can return a frame."""
+    if not 0 <= max_devices <= 16:
+        raise HTTPException(
+            status_code=422,
+            detail="max_devices must be between 0 and 16",
+        )
+    devices = discover_cameras(max_devices=max_devices)
+    return {"devices": devices, "count": len(devices)}
 
 
 @router.get("/camera/frame")
