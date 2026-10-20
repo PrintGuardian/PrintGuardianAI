@@ -34,10 +34,17 @@ npm run dev
 ## API
 
 - `GET /api/status`
-- `GET /api/camera`, `/api/camera/frame`, `/api/camera/stream`
-- `GET /api/analyze`, `/api/printer`, `/api/events`
+- `GET /api/camera`
+- `GET /api/camera/devices?max_devices=5` — probes local camera indexes 0–4 and reports devices that return a frame. The scan opens each device briefly.
+- `GET /api/camera/frame`
+- `GET /api/camera/stream` — multipart MJPEG stream for browser previews.
+- `GET /api/analyze`
+- `GET /api/printer`
+- `GET /api/events`
 - `POST /api/printer/stop`
+
+The camera stream uses FastAPI's `StreamingResponse`. Device discovery is a diagnostic operation; avoid running it repeatedly while another application is using the camera.
 
 ## Safety
 
-The current detector is a visual-change heuristic, not a trained failure-detection model. Automatic print stopping is disabled by default and should be enabled only after supervised testing.
+The current detector is a visual-change heuristic, not a trained failure-detection model. Automatic print stopping is disabled by default and should be enabled only after supervised testing. The emergency stop endpoint should be tested with the printer disconnected or otherwise in a safe state before operational use.
