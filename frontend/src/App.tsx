@@ -138,7 +138,7 @@ export default function App() {
       <section className="print-progress panel" aria-label="Print progress">
         <div className="card-title">
           <div><p className="section-kicker">PRINT JOB</p><h2>{job?.file?.name ?? (printerConnected ? "No active print" : "Printer unavailable")}</h2></div>
-          <span className={`job-badge ${activePrint ? "printing" : ""}`}>{activePrint ? "IN PROGRESS" : job?.state ?? (printerConnected ? "IDLE" : "OFFLINE")}</span>
+          <span className={`job-badge ${activePrint ? "printing" : ""}`}>{activePrint ? "IN PROGRESS" : printer?.job?.state ?? (printerConnected ? "IDLE" : "OFFLINE")}</span>
         </div>
         {job ? (
           <>
