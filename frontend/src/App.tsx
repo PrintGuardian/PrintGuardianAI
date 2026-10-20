@@ -1,59 +1,54 @@
 import { useCallback, useEffect, useState } from "react";
 
-type Camera = {
-  online: boolean;
-  index: number;
-  error?: string | null;
-};
-
-type ServiceStatus = {
-  service: string;
-  status: string;
-  camera: Camera;
-};
-
-type PrinterStatus = {
-  connected: boolean;
-  reason?: string;
-  printer?: Record<string, unknown>;
-};
-
-type EventItem = {
-  timestamp: string;
-  level: string;
-  type: string;
-  message: string;
-};
+type Camera = { online: boolean; index: number; error?: string | null };
+type ServiceStatus = { service: string; status: string; camera: Camera };
+type PrinterStatus = { connected: boolean; reason?: string; printer?: { state?: { text?: string; flags?: Record<string, boolean> }; [key: string]: unknown } };
+type EventItem = { timestamp: string; level: string; type: string; message: string; details?: Record<string, unknown> };
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL ?? "/api").replace(/\/$/, "");
 
-async function readJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${apiBase}${path}`);
-  if (!response.ok) throw new Error(`Request failed (${response.status})`);
-  return response.json() as Promise<T>;
+async function readJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${apiBase}${path}`, init);
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    const detail = body?.detail ?? body?.message;
+    throw new Error(typeof detail === "string" ? detail : `Request failed (${response.status})`);
+  }
+  return body as T;
+}
+
+function formatDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
 export default function App() {
   const [service, setService] = useState<ServiceStatus | null>(null);
   const [printer, setPrinter] = useState<PrinterStatus | null>(null);
   const [events, setEvents] = useState<EventItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
+  const [cameraFailed, setCameraFailed] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const refresh = useCallback(async () => {
-    try {
-      const [nextService, nextPrinter, nextEvents] = await Promise.all([
-        readJson<ServiceStatus>("/status"),
-        readJson<PrinterStatus>("/printer"),
-        readJson<EventItem[]>("/events?limit=8"),
-      ]);
-      setService(nextService);
-      setPrinter(nextPrinter);
-      setEvents(nextEvents);
-      setError(null);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not reach PrintGuardianAI.");
-    }
+    const results = await Promise.allSettled([
+      readJson<ServiceStatus>("/status"),
+      readJson<PrinterStatus>("/printer"),
+      readJson<EventItem[]>("/events?limit=12"),
+    ]);
+    const nextErrors: string[] = [];
+    if (results[0].status === "fulfilled") {
+      setService(results[0].value);
+      setCameraFailed(false);
+    } else nextErrors.push(`System status: ${results[0].reason instanceof Error ? results[0].reason.message : "request failed"}`);
+    if (results[1].status === "fulfilled") setPrinter(results[1].value);
+    else nextErrors.push(`Printer status: ${results[1].reason instanceof Error ? results[1].reason.message : "request failed"}`);
+    if (results[2].status === "fulfilled") setEvents(results[2].value);
+    else nextErrors.push(`Events: ${results[2].reason instanceof Error ? results[2].reason.message : "request failed"}`);
+    setErrors(nextErrors);
+    setLastUpdated(new Date());
   }, []);
 
   useEffect(() => {
@@ -63,88 +58,94 @@ export default function App() {
   }, [refresh]);
 
   const stopPrint = async () => {
-    if (!window.confirm("Stop the active print? This action cannot be undone.")) return;
-
+    if (!window.confirm("Stop the active print? This sends a cancel command to OctoPrint.")) return;
     setStopping(true);
+    setNotice(null);
+    setErrors([]);
     try {
-      const response = await fetch(`${apiBase}/printer/stop`, { method: "POST" });
-      if (!response.ok) throw new Error("The printer did not accept the stop command.");
+      await readJson<{ success: boolean }>("/printer/stop", { method: "POST" });
+      setNotice("Stop command accepted by OctoPrint.");
       await refresh();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not stop the print.");
+      setErrors([reason instanceof Error ? reason.message : "Could not stop the print."]);
     } finally {
       setStopping(false);
     }
   };
 
-  const cameraState = service?.camera.online ? "Online" : "Unavailable";
-  const printerState = printer?.connected ? "Connected" : "Not connected";
+  const cameraOnline = Boolean(service?.camera.online) && !cameraFailed;
+  const printerConnected = Boolean(printer?.connected);
+  const printerState = printer?.printer?.state?.text ?? (printerConnected ? "Connected" : "Not connected");
+  const activePrint = Boolean(printer?.printer?.state?.flags?.printing);
 
   return (
     <main className="dashboard">
-      <header>
+      <header className="page-header">
         <div>
-          <p className="eyebrow">PRINTGUARDIAN AI</p>
+          <p className="eyebrow">PRINTGUARDIAN AI <span className="eyebrow-dot" /></p>
           <h1>Printer monitor</h1>
+          <p className="subtitle">Live safety overview for your 3D printer</p>
         </div>
-        <button className="refresh" onClick={() => void refresh()}>Refresh</button>
+        <div className="header-actions">
+          <span className="updated">{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : "Connecting…"}</span>
+          <button className="refresh" onClick={() => void refresh()}>Refresh</button>
+        </div>
       </header>
 
-      {error && <p className="alert">{error}</p>}
+      {errors.length > 0 && <div className="alerts" role="alert">{errors.map((message) => <p className="alert" key={message}>{message}</p>)}</div>}
+      {notice && <p className="notice" role="status">{notice}</p>}
 
-      <section className="summary">
-        <article>
-          <span>Service</span>
-          <strong className={service?.status === "online" ? "good" : ""}>
-            {service?.status ?? "Checking…"}
-          </strong>
+      <section className="summary" aria-label="System status">
+        <article className="summary-card">
+          <span className="summary-label">System</span>
+          <div className="summary-value"><i className={`status-dot ${service?.status === "online" ? "is-good" : "is-muted"}`} /><strong>{service?.status ?? "Checking…"}</strong></div>
+          <small>{service?.service ?? "PrintGuardianAI"}</small>
         </article>
-        <article>
-          <span>Camera</span>
-          <strong className={service?.camera.online ? "good" : "warning"}>{cameraState}</strong>
+        <article className="summary-card">
+          <span className="summary-label">Camera</span>
+          <div className="summary-value"><i className={`status-dot ${cameraOnline ? "is-good" : "is-warning"}`} /><strong>{cameraOnline ? "Online" : "Unavailable"}</strong></div>
+          <small>{service?.camera ? `Device ${service.camera.index}` : "Waiting for camera"}</small>
         </article>
-        <article>
-          <span>OctoPrint</span>
-          <strong className={printer?.connected ? "good" : "warning"}>{printerState}</strong>
+        <article className="summary-card">
+          <span className="summary-label">Printer</span>
+          <div className="summary-value"><i className={`status-dot ${printerConnected ? "is-good" : "is-warning"}`} /><strong>{printerState}</strong></div>
+          <small>{activePrint ? "Print in progress" : printerConnected ? "OctoPrint connected" : printer?.reason ?? "Waiting for OctoPrint"}</small>
         </article>
       </section>
 
       <section className="grid">
-        <article className="camera-card">
-          <div className="card-title">
-            <h2>Live camera</h2>
-            <span className={service?.camera.online ? "badge online" : "badge"}>{cameraState}</span>
-          </div>
-          {service?.camera.online ? (
-            <img src={`${apiBase}/camera/stream`} alt="Live view of the printer" />
-          ) : (
-            <div className="camera-placeholder">Connect a camera to start the live preview.</div>
-          )}
+        <article className="camera-card panel">
+          <div className="card-title"><div><p className="section-kicker">MONITORING</p><h2>Live camera</h2></div><span className={`badge ${cameraOnline ? "online" : ""}`}><i className="status-dot" />{cameraOnline ? "LIVE" : "OFFLINE"}</span></div>
+          {cameraOnline ? (
+            <div className="camera-frame">
+              {!cameraFailed && <img src={`${apiBase}/camera/stream`} alt="Live view of the printer" onError={() => setCameraFailed(true)} />}
+              {cameraFailed && <div className="camera-placeholder"><strong>Stream unavailable</strong><span>{service?.camera.error ?? "The camera connection was interrupted. Refresh to try again."}</span></div>}
+              {!cameraFailed && <span className="live-tag"><i className="status-dot is-live" /> LIVE VIEW</span>}
+            </div>
+          ) : <div className="camera-frame camera-placeholder"><strong>Camera unavailable</strong><span>{service?.camera.error ?? "Connect or configure a camera to start the live preview."}</span></div>}
         </article>
 
-        <article className="control-card">
-          <h2>Safety control</h2>
-          <p>Emergency stop sends a cancel command to OctoPrint.</p>
-          <button className="stop" disabled={!printer?.connected || stopping} onClick={() => void stopPrint()}>
-            {stopping ? "Stopping…" : "STOP PRINT"}
-          </button>
-          {!printer?.connected && <small>Configure OctoPrint in <code>.env</code> to enable this action.</small>}
+        <article className="control-card panel">
+          <div className="card-title"><div><p className="section-kicker">MANUAL CONTROL</p><h2>Safety stop</h2></div><span className="stop-symbol">!</span></div>
+          <p className="control-copy">Cancel the current print job through OctoPrint. You’ll be asked to confirm before the command is sent.</p>
+          <div className="job-state"><span>Printer state</span><strong>{printerState}</strong></div>
+          <button className="stop" disabled={!printerConnected || stopping} onClick={() => void stopPrint()}><span>{stopping ? "SENDING STOP…" : "STOP PRINT"}</span><span aria-hidden="true">→</span></button>
+          {!printerConnected && <small className="hint">Connect OctoPrint to enable the stop control.</small>}
+          {printerConnected && !activePrint && <small className="hint">Stop command will be sent to OctoPrint even if no active job is reported.</small>}
+          <div className="safety-note"><span aria-hidden="true">◆</span><p>Only use this control when you need to cancel a print immediately.</p></div>
         </article>
 
-        <article className="events-card">
-          <div className="card-title"><h2>Recent events</h2><span>{events.length}</span></div>
-          {events.length ? (
-            <ul>
-              {events.map((event) => (
-                <li key={`${event.timestamp}-${event.type}`}>
-                  <span className={`level ${event.level.toLowerCase()}`}>{event.level}</span>
-                  <div><strong>{event.message}</strong><small>{new Date(event.timestamp).toLocaleString()}</small></div>
-                </li>
-              ))}
-            </ul>
-          ) : <p className="empty">No recorded events yet.</p>}
+        <article className="events-card panel">
+          <div className="card-title"><div><p className="section-kicker">ACTIVITY</p><h2>Recent events</h2></div><span className="event-count">{events.length} {events.length === 1 ? "event" : "events"}</span></div>
+          {events.length ? <ul>{events.map((event, index) => <li key={`${event.timestamp}-${event.type}-${index}`}>
+            <span className={`level ${event.level.toLowerCase()}`}>{event.level}</span>
+            <div className="event-copy"><strong>{event.message}</strong><small>{formatDate(event.timestamp)}</small></div>
+            <span className="event-type">{event.type.replaceAll("_", " ")}</span>
+          </li>)}</ul> : <p className="empty">{errors.some((message) => message.startsWith("Events:")) ? "Events could not be loaded." : "No recorded events yet."}</p>}
         </article>
       </section>
+      <footer><span>PrintGuardianAI</span><span>Monitoring refreshes every 5 seconds</span></footer>
     </main>
   );
 }
+
