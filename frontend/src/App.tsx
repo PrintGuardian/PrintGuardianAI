@@ -2,7 +2,17 @@ import { useCallback, useEffect, useState } from "react";
 
 type Camera = { online: boolean; index: number; error?: string | null };
 type ServiceStatus = { service: string; status: string; camera: Camera };
-type PrinterStatus = { connected: boolean; reason?: string; printer?: { state?: { text?: string; flags?: Record<string, boolean> }; [key: string]: unknown } };
+type PrinterStatus = {
+  connected: boolean;
+  reason?: string;
+  job_error?: string;
+  printer?: { state?: { text?: string; flags?: Record<string, boolean> }; [key: string]: unknown };
+  job?: {
+    job?: { file?: { name?: string }; estimatedPrintTime?: number };
+    progress?: { completion?: number; printTime?: number; printTimeLeft?: number };
+    state?: string;
+  };
+};
 type EventItem = { timestamp: string; level: string; type: string; message: string; details?: Record<string, unknown> };
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL ?? "/api").replace(/\/$/, "");
@@ -20,6 +30,13 @@ async function readJson<T>(path: string, init?: RequestInit): Promise<T> {
 function formatDate(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function formatDuration(seconds?: number): string {
+  if (seconds === undefined || !Number.isFinite(seconds)) return "—";
+  const minutes = Math.max(0, Math.floor(seconds / 60));
+  const hours = Math.floor(minutes / 60);
+  return hours ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
 }
 
 export default function App() {
@@ -77,6 +94,11 @@ export default function App() {
   const printerConnected = Boolean(printer?.connected);
   const printerState = printer?.printer?.state?.text ?? (printerConnected ? "Connected" : "Not connected");
   const activePrint = Boolean(printer?.printer?.state?.flags?.printing);
+  const job = printer?.job?.job;
+  const jobProgress = printer?.job?.progress;
+  const progressPercent = typeof jobProgress?.completion === "number"
+    ? Math.min(100, Math.max(0, jobProgress.completion))
+    : null;
 
   return (
     <main className="dashboard">
@@ -111,6 +133,25 @@ export default function App() {
           <div className="summary-value"><i className={`status-dot ${printerConnected ? "is-good" : "is-warning"}`} /><strong>{printerState}</strong></div>
           <small>{activePrint ? "Print in progress" : printerConnected ? "OctoPrint connected" : printer?.reason ?? "Waiting for OctoPrint"}</small>
         </article>
+      </section>
+
+      <section className="print-progress panel" aria-label="Print progress">
+        <div className="card-title">
+          <div><p className="section-kicker">PRINT JOB</p><h2>{job?.file?.name ?? (printerConnected ? "No active print" : "Printer unavailable")}</h2></div>
+          <span className={`job-badge ${activePrint ? "printing" : ""}`}>{activePrint ? "IN PROGRESS" : job?.state ?? (printerConnected ? "IDLE" : "OFFLINE")}</span>
+        </div>
+        {job ? (
+          <>
+            <div className="progress-track" aria-label={progressPercent === null ? "Progress unavailable" : `${progressPercent.toFixed(0)} percent complete`}>
+              <span style={{ width: `${progressPercent ?? 0}%` }} />
+            </div>
+            <div className="progress-meta">
+              <strong>{progressPercent === null ? "Progress unavailable" : `${progressPercent.toFixed(1)}% complete`}</strong>
+              <span>{formatDuration(jobProgress?.printTimeLeft)} remaining</span>
+            </div>
+            {printer?.job_error && <small className="hint">Job details are temporarily unavailable: {printer.job_error}</small>}
+          </>
+        ) : <p className="empty">{printerConnected ? "OctoPrint reports no current job." : printer?.reason ?? "Connect to OctoPrint to see print progress."}</p>}
       </section>
 
       <section className="grid">
