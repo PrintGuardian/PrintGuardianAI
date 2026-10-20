@@ -140,7 +140,7 @@ export default function App() {
           {events.length ? <ul>{events.map((event, index) => <li key={`${event.timestamp}-${event.type}-${index}`}>
             <span className={`level ${event.level.toLowerCase()}`}>{event.level}</span>
             <div className="event-copy"><strong>{event.message}</strong><small>{formatDate(event.timestamp)}</small></div>
-            <span className="event-type">{event.type.replaceAll("_", " ")}</span>
+            <span className="event-type">{event.type.replace(/_/g, " ")}</span>
           </li>)}</ul> : <p className="empty">{errors.some((message) => message.startsWith("Events:")) ? "Events could not be loaded." : "No recorded events yet."}</p>}
         </article>
       </section>
@@ -148,4 +148,5 @@ export default function App() {
     </main>
   );
 }
+
 
