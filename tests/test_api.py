@@ -2,6 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import requests
 from fastapi.testclient import TestClient
 
 from backend import config, events
@@ -106,3 +107,66 @@ def test_camera_devices_endpoint_validates_probe_limit(monkeypatch) -> None:
     assert valid.status_code == 200
     assert valid.json() == {"devices": [], "count": 0}
     assert invalid.status_code == 422
+
+
+def test_octoprint_status_includes_active_job(monkeypatch) -> None:
+    class FakeResponse:
+        def __init__(self, payload) -> None:
+            self.payload = payload
+
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self):
+            return self.payload
+
+    responses = iter([
+        FakeResponse({"state": {"text": "Printing"}}),
+        FakeResponse({
+            "job": {"file": {"name": "benchy.gcode"}, "estimatedPrintTime": 7200},
+            "progress": {"completion": 42.5, "printTime": 1800, "printTimeLeft": 2400},
+            "state": "Printing",
+        }),
+    ])
+    monkeypatch.setattr(
+        "backend.octoprint.get_settings",
+        lambda: SimpleNamespace(
+            octoprint_url="http://octoprint.local",
+            octoprint_api_key="test-key",
+            request_timeout_seconds=2,
+        ),
+    )
+    monkeypatch.setattr("backend.octoprint.requests.get", lambda *args, **kwargs: next(responses))
+
+    result = OctoPrintClient().status()
+
+    assert result["connected"] is True
+    assert result["job"]["job"]["file"]["name"] == "benchy.gcode"
+    assert result["job"]["progress"]["completion"] == 42.5
+
+
+def test_octoprint_status_keeps_connection_when_job_request_fails(monkeypatch) -> None:
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self):
+            return {"state": {"text": "Operational"}}
+
+    responses = iter([FakeResponse(), requests.Timeout("job timed out")])
+    monkeypatch.setattr(
+        "backend.octoprint.get_settings",
+        lambda: SimpleNamespace(
+            octoprint_url="http://octoprint.local",
+            octoprint_api_key="test-key",
+            request_timeout_seconds=2,
+        ),
+    )
+    monkeypatch.setattr("backend.octoprint.requests.get", lambda *args, **kwargs: next(responses))
+
+    result = OctoPrintClient().status()
+
+    assert result["connected"] is True
+    assert result["printer"]["state"]["text"] == "Operational"
+    assert result["job_error"] == "job timed out"
+
