@@ -28,6 +28,7 @@ class FakeCamera:
 def _settings() -> SimpleNamespace:
     return SimpleNamespace(
         ai_agent_enabled=True,
+        ai_interval_seconds=120,
         ollama_base_url="http://ollama:11434",
         vision_model="qwen3-vl:2b-instruct",
         ai_timeout_seconds=180,
