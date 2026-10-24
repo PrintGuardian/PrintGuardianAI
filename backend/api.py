@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, Response
+import secrets
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from fastapi.responses import StreamingResponse
 
 from .ai_detector import detector
@@ -95,8 +97,19 @@ def printer_status() -> dict:
     return octoprint.status()
 
 
+def require_control_token(token: str | None = Header(default=None, alias="X-PrintGuardian-Token")) -> None:
+    configured_token = get_settings().control_api_token
+    if not configured_token:
+        raise HTTPException(
+            status_code=503,
+            detail="Print stop is disabled. Set CONTROL_API_TOKEN on the backend.",
+        )
+    if token is None or not secrets.compare_digest(token, configured_token):
+        raise HTTPException(status_code=401, detail="Missing or invalid control token")
+
+
 @router.post("/printer/stop")
-def stop_print() -> dict:
+def stop_print(_: None = Depends(require_control_token)) -> dict:
     result = octoprint.cancel_print()
     record_event(
         "CRITICAL" if result["success"] else "WARNING",
