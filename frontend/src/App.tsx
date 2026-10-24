@@ -76,11 +76,16 @@ export default function App() {
 
   const stopPrint = async () => {
     if (!window.confirm("Stop the active print? This sends a cancel command to OctoPrint.")) return;
+    const token = window.prompt("Enter the control token configured as CONTROL_API_TOKEN on the PrintGuardian server.");
+    if (token === null) return;
     setStopping(true);
     setNotice(null);
     setErrors([]);
     try {
-      await readJson<{ success: boolean }>("/printer/stop", { method: "POST" });
+      await readJson<{ success: boolean }>("/printer/stop", {
+        method: "POST",
+        headers: { "X-PrintGuardian-Token": token },
+      });
       setNotice("Stop command accepted by OctoPrint.");
       await refresh();
     } catch (reason) {
