@@ -20,7 +20,7 @@ To follow service logs, run `docker compose logs -f`. Stop the stack with `docke
 
 The opt-in agent sends resized camera frames to a local Ollama service and reports structured assessments in the dashboard and event list. It does not call OctoPrint or stop a print. A possible warning is advisory and should be checked against the live printer.
 
-The default model is `qwen3-vl:2b-instruct` (about 1.9 GB in its quantized package). The agent samples every 120 seconds, scales frames to at most 768 pixels on the longest side, limits context to 2,048 tokens, and lets Ollama unload the model after two idle minutes. These settings reduce memory and CPU pressure on the Pi; inference speed still depends on cooling, camera resolution, and other services.
+The default model is [`qwen3-vl:2b-instruct`](https://ollama.com/library/qwen3-vl:2b-instruct) (Q4_K_M, about 1.9 GB). The agent samples every 120 seconds, scales frames to at most 768 pixels on the longest side, limits context to 2,048 tokens, and lets Ollama unload the model after two idle minutes. These settings reduce memory and CPU pressure on the Pi; inference speed still depends on cooling, camera resolution, and other services. This configuration assumes CPU inference and does not require an AI HAT. It has not yet been benchmarked on the target Pi, so monitor temperature and response time during supervised use.
 
 To enable it:
 
@@ -31,7 +31,7 @@ To enable it:
 
 The dashboard shows agent state, model, last assessment, confidence, and any service error. The `/api/ai/status` endpoint exposes the same status. To disable the agent, set `AI_AGENT_ENABLED=false` and recreate the API container. Model files stay in the ignored local `ollama/` directory.
 
-Inference runs inside the local Compose network. The model is downloaded from Ollama during setup, but camera frames are sent only to the local Ollama service at runtime. Keep the Pi on a ventilated surface and allow extra time for the first model load. The model is a general vision-language model, not a detector trained specifically for your printer, so it can miss failures or raise false alarms. Automatic print stopping remains disabled.
+Inference runs inside the local Compose network. The model is downloaded from Ollama during setup, but camera frames are sent only to the local Ollama service at runtime. Keep the Pi on a ventilated surface and allow extra time for the first model load. The model is a general vision-language model, not a detector trained specifically for your printer, so it can miss failures or raise false alarms. The local vision agent never sends a stop command. The separate legacy heuristic auto-stop remains disabled by default.
 
 ## Run for development
 
