@@ -1,4 +1,4 @@
-import json
+import json as jsonlib
 from types import SimpleNamespace
 
 import cv2
@@ -58,7 +58,7 @@ def test_local_agent_compares_frames_and_deduplicates_alerts(monkeypatch) -> Non
         assert url == "http://ollama:11434/api/chat"
         assert timeout == 180
         payloads.append(json)
-        return FakeResponse(__import__("json").dumps(assessment))
+        return FakeResponse(jsonlib.dumps(assessment))
 
     monkeypatch.setattr("backend.vision_agent.requests.post", fake_post)
     agent = LocalVisionAgent()
