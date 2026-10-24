@@ -88,6 +88,7 @@ class LocalVisionAgent:
         """Analyze one frame per interval without blocking FastAPI's event loop."""
         while True:
             settings = get_settings()
+            started = time.monotonic()
             if settings.ai_agent_enabled:
                 try:
                     await asyncio.to_thread(self.analyze_once, camera)
@@ -96,7 +97,9 @@ class LocalVisionAgent:
             else:
                 with self._lock:
                     self._state = "disabled"
-            await asyncio.sleep(max(30, settings.ai_interval_seconds))
+            elapsed = time.monotonic() - started
+            delay = max(30, settings.ai_interval_seconds - int(elapsed))
+            await asyncio.sleep(delay)
 
     def analyze_once(self, camera: Any) -> dict[str, Any] | None:
         """Capture and assess one frame; exposed for explicit diagnostics and tests."""
@@ -167,7 +170,7 @@ class LocalVisionAgent:
 
             self._record_alert_if_needed(assessment, settings.ai_min_confidence, settings.ai_alert_cooldown_seconds)
             return result
-        except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError) as exc:
+        except Exception as exc:
             self._set_error(str(exc))
             return None
 
