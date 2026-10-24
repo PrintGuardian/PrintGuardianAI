@@ -8,6 +8,7 @@ from .camera import camera, discover_cameras
 from .config import get_settings
 from .events import recent_events, record_event
 from .octoprint import octoprint
+from .vision_agent import vision_agent
 
 router = APIRouter(prefix="/api")
 
@@ -103,6 +104,12 @@ def analyze(control_token: str | None = Header(default=None, alias="X-PrintGuard
             )
             payload["automatic_stop"] = stopped
     return payload
+
+
+@router.get("/ai/status")
+def local_ai_status() -> dict:
+    """Return local vision-agent state and its most recent assessment."""
+    return vision_agent.status()
 
 
 @router.get("/printer")
