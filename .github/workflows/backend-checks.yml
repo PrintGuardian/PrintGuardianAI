@@ -30,3 +30,14 @@ jobs:
       - run: npm install
       - run: npm run build
 
+  deployment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare local environment
+        run: cp .env.example .env
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+      - name: Build deployment images
+        run: docker compose build
+
