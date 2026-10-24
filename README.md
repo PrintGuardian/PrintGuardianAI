@@ -16,6 +16,23 @@ The dashboard and API use one origin. Only the dashboard port is published; the 
 
 To follow service logs, run `docker compose logs -f`. Stop the stack with `docker compose down`.
 
+## Optional local vision agent (Raspberry Pi 5, 8 GB)
+
+The opt-in agent sends resized camera frames to a local Ollama service and reports structured assessments in the dashboard and event list. It does not call OctoPrint or stop a print. A possible warning is advisory and should be checked against the live printer.
+
+The default model is `qwen3-vl:2b-instruct` (about 1.9 GB in its quantized package). The agent samples every 120 seconds, scales frames to at most 768 pixels on the longest side, limits context to 2,048 tokens, and lets Ollama unload the model after two idle minutes. These settings reduce memory and CPU pressure on the Pi; inference speed still depends on cooling, camera resolution, and other services.
+
+To enable it:
+
+1. Start the optional local model service: `docker compose --profile ai up -d ollama`.
+2. Download the model once: `docker compose exec ollama ollama pull qwen3-vl:2b-instruct`.
+3. Set `AI_AGENT_ENABLED=true` in `.env`.
+4. Restart the API: `docker compose up -d --force-recreate printguardian`.
+
+The dashboard shows agent state, model, last assessment, confidence, and any service error. The `/api/ai/status` endpoint exposes the same status. To disable the agent, set `AI_AGENT_ENABLED=false` and recreate the API container. Model files stay in the ignored local `ollama/` directory.
+
+Inference runs inside the local Compose network. The model is downloaded from Ollama during setup, but camera frames are sent only to the local Ollama service at runtime. Keep the Pi on a ventilated surface and allow extra time for the first model load. The model is a general vision-language model, not a detector trained specifically for your printer, so it can miss failures or raise false alarms. Automatic print stopping remains disabled.
+
 ## Run for development
 
 1. Copy `.env.example` to `.env` and provide the camera, OctoPrint, and control-token settings.
