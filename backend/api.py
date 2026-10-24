@@ -12,6 +12,18 @@ from .octoprint import octoprint
 router = APIRouter(prefix="/api")
 
 
+def require_control_token(token: str | None = Header(default=None, alias="X-PrintGuardian-Token")) -> None:
+    configured_token = get_settings().control_api_token
+    if not configured_token:
+        raise HTTPException(
+            status_code=503,
+            detail="Print stop is disabled. Set CONTROL_API_TOKEN on the backend.",
+        )
+    if token is None or not secrets.compare_digest(token, configured_token):
+        raise HTTPException(status_code=401, detail="Missing or invalid control token")
+
+
+
 @router.get("/status")
 def status() -> dict:
     return {
@@ -63,7 +75,7 @@ def camera_stream() -> StreamingResponse:
 
 
 @router.get("/analyze")
-def analyze() -> dict:
+def analyze(control_token: str | None = Header(default=None, alias="X-PrintGuardian-Token")) -> dict:
     frame = camera.frame()
     if frame is None:
         raise HTTPException(status_code=503, detail="Camera frame is unavailable")
@@ -81,6 +93,7 @@ def analyze() -> dict:
             settings.auto_stop_enabled
             and result.confidence >= settings.auto_stop_confidence
         ):
+            require_control_token(control_token)
             stopped = octoprint.cancel_print()
             record_event(
                 "CRITICAL",
@@ -95,17 +108,6 @@ def analyze() -> dict:
 @router.get("/printer")
 def printer_status() -> dict:
     return octoprint.status()
-
-
-def require_control_token(token: str | None = Header(default=None, alias="X-PrintGuardian-Token")) -> None:
-    configured_token = get_settings().control_api_token
-    if not configured_token:
-        raise HTTPException(
-            status_code=503,
-            detail="Print stop is disabled. Set CONTROL_API_TOKEN on the backend.",
-        )
-    if token is None or not secrets.compare_digest(token, configured_token):
-        raise HTTPException(status_code=401, detail="Missing or invalid control token")
 
 
 @router.post("/printer/stop")
