@@ -4,6 +4,8 @@ services:
     container_name: printguardianai-api
     env_file:
       - .env
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
     volumes:
       - ./data:/app/data
     # USB webcam detected on the target Raspberry Pi.
@@ -19,4 +21,16 @@ services:
       - printguardian
     ports:
       - "8080:80"
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:0.12.7
+    container_name: printguardianai-ollama
+    profiles: ["ai"]
+    environment:
+      OLLAMA_KEEP_ALIVE: 2m
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+    volumes:
+      - ./ollama:/root/.ollama
     restart: unless-stopped
