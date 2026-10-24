@@ -173,6 +173,11 @@ export default function App() {
           <div className="summary-value"><i className={`status-dot ${printerConnected ? "is-good" : "is-warning"}`} /><strong>{printerState}</strong></div>
           <small>{activePrint ? "Print in progress" : printerConnected ? "OctoPrint connected" : printer?.reason ?? "Waiting for OctoPrint"}</small>
         </article>
+        <article className="summary-card">
+          <span className="summary-label">Local AI</span>
+          <div className="summary-value"><i className={"status-dot " + (agentLabel === "Ready" ? "is-good" : agentLabel === "Unavailable" ? "is-warning" : "is-muted")} /><strong>{agentLabel}</strong></div>
+          <small>{agent?.model ?? "Configure a local model"}</small>
+        </article>
       </section>
 
       <section className="print-progress panel" aria-label="Print progress">
@@ -192,6 +197,32 @@ export default function App() {
             {printer?.job_error && <small className="hint">Job details are temporarily unavailable: {printer.job_error}</small>}
           </>
         ) : <p className="empty">{printerConnected ? "OctoPrint reports no current job." : printer?.reason ?? "Connect to OctoPrint to see print progress."}</p>}
+      </section>
+
+      <section className="ai-observation panel" aria-label="Local AI assessment">
+        <div className="card-title">
+          <div><p className="section-kicker">LOCAL VISION AGENT</p><h2>AI assessment</h2></div>
+          <span className={"job-badge " + (observation?.risk_level ?? "")}>{observation ? observation.risk_level.toUpperCase() : agentLabel.toUpperCase()}</span>
+        </div>
+        {!agent?.enabled ? (
+          <p className="empty">Local analysis is disabled. Enable the optional Ollama service to assess camera frames on this device.</p>
+        ) : agent.last_error ? (
+          <p className="ai-error" role="status">{agent.last_error}</p>
+        ) : observation ? (
+          <div className="ai-result">
+            <strong>{observation.issue || "No issue description returned"}</strong>
+            <p>{observation.evidence || "No visual evidence provided."}</p>
+            <div className="ai-meta">
+              <span>{Math.round(observation.confidence * 100)}% model confidence</span>
+              <span>{observation.compared_frames === 2 ? "Compared with prior frame" : "Single-frame assessment"}</span>
+              <span>{formatDate(observation.timestamp)}</span>
+            </div>
+            {observation.recommendation && <p className="ai-recommendation"><b>Suggested check:</b> {observation.recommendation}</p>}
+            <small className="hint">Advisory only. Verify the printer in person; this model can miss faults or raise false alarms.</small>
+          </div>
+        ) : (
+          <p className="empty">Waiting for the first local camera assessment. Model: {agent.model} · every {agent.interval_seconds}s.</p>
+        )}
       </section>
 
       <section className="grid">
