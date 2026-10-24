@@ -1,9 +1,7 @@
 services:
   printguardian:
     build: .
-    container_name: printguardianai
-    ports:
-      - "8000:8000"
+    container_name: printguardianai-api
     env_file:
       - .env
     volumes:
@@ -11,4 +9,14 @@ services:
     # USB webcam detected on the target Raspberry Pi.
     devices:
       - /dev/video0:/dev/video0
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ./frontend
+    container_name: printguardianai-dashboard
+    depends_on:
+      - printguardian
+    ports:
+      - "8080:80"
     restart: unless-stopped
