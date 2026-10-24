@@ -15,6 +15,7 @@ class Settings:
     camera_stream_fps: int = 5
     octoprint_url: str = ""
     octoprint_api_key: str = ""
+    control_api_token: str = ""
     request_timeout_seconds: float = 5.0
     event_log_path: str = "data/events.jsonl"
     auto_stop_enabled: bool = False
@@ -42,6 +43,7 @@ def get_settings() -> Settings:
         camera_stream_fps=max(1, int(values.get("CAMERA_STREAM_FPS", "5"))),
         octoprint_url=values.get("OCTOPRINT_URL", ""),
         octoprint_api_key=values.get("OCTOPRINT_API_KEY", ""),
+        control_api_token=values.get("CONTROL_API_TOKEN", "").strip(),
         request_timeout_seconds=float(values.get("REQUEST_TIMEOUT_SECONDS", "5")),
         event_log_path=values.get("EVENT_LOG_PATH", "data/events.jsonl"),
         auto_stop_enabled=_as_bool(values.get("AUTO_STOP_ENABLED", "false")),
