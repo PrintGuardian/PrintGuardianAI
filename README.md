@@ -43,7 +43,7 @@ The Vite development server proxies `/api` to `http://localhost:8000`. Visit the
 - `GET /api/events`
 - `POST /api/printer/stop` — requires the `X-PrintGuardian-Token` header to match `CONTROL_API_TOKEN`.
 
-Camera discovery briefly opens each device; avoid running it repeatedly while another application is using the camera. Read-only status endpoints do not require a control token. If `CONTROL_API_TOKEN` is unset, the stop endpoint responds with `503`; a missing or incorrect token responds with `401`.
+Camera discovery briefly opens each device; avoid running it repeatedly while another application is using the camera. Read-only status endpoints do not require a control token. If `AUTO_STOP_ENABLED=true`, a qualifying stop triggered through `/api/analyze` also requires the control token. If `CONTROL_API_TOKEN` is unset, stop actions are disabled with `503`; a missing or incorrect token responds with `401`.
 
 ## Safety
 
