@@ -13,6 +13,27 @@ type PrinterStatus = {
     state?: string;
   };
 };
+type VisionObservation = {
+  risk_level: "clear" | "watch" | "warning" | "critical";
+  confidence: number;
+  issue: string;
+  evidence: string;
+  recommendation: string;
+  model: string;
+  timestamp: string;
+  compared_frames: number;
+};
+type AgentStatus = {
+  enabled: boolean;
+  state: string;
+  provider: string;
+  model: string;
+  interval_seconds: number;
+  last_analysis_at?: string | null;
+  last_observation?: VisionObservation | null;
+  last_error?: string | null;
+  last_duration_seconds?: number | null;
+};
 type EventItem = { timestamp: string; level: string; type: string; message: string; details?: Record<string, unknown> };
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL ?? "/api").replace(/\/$/, "");
@@ -42,6 +63,7 @@ function formatDuration(seconds?: number): string {
 export default function App() {
   const [service, setService] = useState<ServiceStatus | null>(null);
   const [printer, setPrinter] = useState<PrinterStatus | null>(null);
+  const [agent, setAgent] = useState<AgentStatus | null>(null);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
@@ -54,6 +76,7 @@ export default function App() {
       readJson<ServiceStatus>("/status"),
       readJson<PrinterStatus>("/printer"),
       readJson<EventItem[]>("/events?limit=12"),
+      readJson<AgentStatus>("/ai/status"),
     ]);
     const nextErrors: string[] = [];
     if (results[0].status === "fulfilled") {
@@ -64,6 +87,8 @@ export default function App() {
     else nextErrors.push(`Printer status: ${results[1].reason instanceof Error ? results[1].reason.message : "request failed"}`);
     if (results[2].status === "fulfilled") setEvents(results[2].value);
     else nextErrors.push(`Events: ${results[2].reason instanceof Error ? results[2].reason.message : "request failed"}`);
+    if (results[3].status === "fulfilled") setAgent(results[3].value);
+    else nextErrors.push(`Local AI: ${results[3].reason instanceof Error ? results[3].reason.message : "request failed"}`);
     setErrors(nextErrors);
     setLastUpdated(new Date());
   }, []);
@@ -96,6 +121,16 @@ export default function App() {
   };
 
   const cameraOnline = Boolean(service?.camera.online) && !cameraFailed;
+  const agentLabel = !agent?.enabled
+    ? "Disabled"
+    : agent.state === "analyzing"
+      ? "Analyzing"
+      : agent.last_error
+        ? "Unavailable"
+        : agent.last_observation
+          ? "Ready"
+          : "Starting";
+  const observation = agent?.last_observation;
   const printerConnected = Boolean(printer?.connected);
   const printerState = printer?.printer?.state?.text ?? (printerConnected ? "Connected" : "Not connected");
   const activePrint = Boolean(printer?.printer?.state?.flags?.printing);
